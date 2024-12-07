@@ -6,10 +6,18 @@
 #property link      ""
 #property version   "2.02"
 #property strict
+enum ENUM_TRADE_DIRECTION
+  {
+   BUY_ONLY=0,
+   SELL_ONLY=1,
+   BOTH=2,
+
+  };
+
 
 //--- Input Parameters
 input int    magicNumber    = 12345;                  // Magic Number
-
+input ENUM_TRADE_DIRECTION trade_direction = BOTH;
 //--- Stochastic 1 Parameters
 input bool   UseSto1        = true;                   // Use Stochastic 1
 input int    Sto1_KPeriod   = 9;                      // Sto1 %K Period
@@ -36,6 +44,7 @@ input int    Sto4_Slowing   = 3;                      // Sto4 Slowing
 
 //--- Common Parameters
 input double Sto_LowerLevel = 20.0;                   // Lower Level for all Stochastics
+input double Sto_UpperLevel = 80.0;
 input int    LookbackPeriod = 3;                      // Lookback period for Stochastic conditions
 
 //--- Trading Parameters
@@ -55,6 +64,7 @@ input bool MA2_active = false;
 input bool MA3_active = false;
 
 input bool MACD_active= false;
+
 int          fast_ema_period=12;   // Fast EMA period
 int          slow_ema_period= 26; // Slow EMA period
 int          signal_period=9;    // Signal line period
@@ -112,19 +122,14 @@ void OnTick()
      }
 
 //--- Check for fractal on the low
-   double fractalValue = iFractals(NULL, 0, MODE_LOWER, 2);
-   if(fractalValue == 0 || fractalValue != Low[2])
-     {
-      //--- No valid fractal found at shift 2
-      return;
-     }
 
-//--- Check Stochastic Conditions
-   if(!CheckStochasticConditions())
-     {
-      //--- Conditions not met
-      return;
-     }
+
+////--- Check Stochastic Conditions
+//   if(!CheckStochasticConditions_Buy())
+//     {
+//      //--- Conditions not met
+//      return;
+//     }
    double ma1= iMA(_Symbol, PERIOD_CURRENT, MA1_period, 0, MA1_method, PRICE_CLOSE, 0);
    double ma2=  iMA(_Symbol, PERIOD_CURRENT, MA2_period, 0, MA2_method, PRICE_CLOSE, 0);
    double ma3=  iMA(_Symbol, PERIOD_CURRENT, MA3_period, 0, MA3_method, PRICE_CLOSE, 0);
@@ -132,9 +137,36 @@ void OnTick()
    double macd_fast= iMACD(_Symbol, PERIOD_CURRENT, fast_ema_period, slow_ema_period, signal_period, PRICE_CLOSE, MODE_SIGNAL, 0);
    double macd_slow= iMACD(_Symbol, PERIOD_CURRENT, fast_ema_period, slow_ema_period, signal_period, PRICE_CLOSE, MODE_MAIN, 0);
 //--- All conditions met, place a buy order
+//place buy
+   if(trade_direction !=SELL_ONLY  && CheckStochasticConditions_Buy())
+     {
+      double fractalValue = iFractals(NULL, 0, MODE_LOWER, 2);
+      if(fractalValue == 0 || fractalValue != Low[2])
+        {
+         //--- No valid fractal found at shift 2
+         return;
+        }
+      if((!MA1_active || Bid> ma1) && (!MA2_active || Bid> ma2)&& (!MA3_active || Bid> ma3) && (!MACD_active || macd_fast > macd_slow))
+         PlaceBuyOrder(fractalValue);
 
-   if((!MA1_active || Bid> ma1) && (!MA2_active || Bid> ma2)&& (!MA3_active || Bid> ma3) && (!MACD_active || macd_fast > macd_slow))
-      PlaceBuyOrder(fractalValue);
+     }
+
+//place sell
+   if(trade_direction !=BUY_ONLY  && CheckStochasticConditions_Sell())
+     {
+      double fractalValue = iFractals(NULL, 0, MODE_UPPER, 2);
+      if(fractalValue == 0 || fractalValue != High[2])
+        {
+         //--- No valid fractal found at shift 2
+         return;
+        }
+
+      if((!MA1_active || Bid< ma1) && (!MA2_active || Bid< ma2)&& (!MA3_active || Bid< ma3) && (!MACD_active || macd_fast < macd_slow))
+         PlaceSellOrder(fractalValue);
+
+     }
+
+
   }
 
 //+------------------------------------------------------------------+
@@ -160,7 +192,7 @@ int CountOpenPositions()
 //+------------------------------------------------------------------+
 //| Check Stochastic Conditions                                      |
 //+------------------------------------------------------------------+
-bool CheckStochasticConditions()
+bool CheckStochasticConditions_Buy()
   {
    bool conditionMet = true;
 
@@ -196,6 +228,47 @@ bool CheckStochasticConditions()
    return conditionMet;
   }
 
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CheckStochasticConditions_Sell()
+  {
+   bool conditionMet = true;
+
+//--- Check for each selected Stochastic
+   if(UseSto1)
+     {
+      if(!IsStoAboveLevel(Sto1_KPeriod, Sto1_DPeriod, Sto1_Slowing))
+        {
+         conditionMet = false;
+        }
+     }
+   if(UseSto2)
+     {
+      if(!IsStoAboveLevel(Sto2_KPeriod, Sto2_DPeriod, Sto2_Slowing))
+        {
+         conditionMet = false;
+        }
+     }
+   if(UseSto3)
+     {
+      if(!IsStoAboveLevel(Sto3_KPeriod, Sto3_DPeriod, Sto3_Slowing))
+        {
+         conditionMet = false;
+        }
+     }
+   if(UseSto4)
+     {
+      if(!IsStoAboveLevel(Sto4_KPeriod, Sto4_DPeriod, Sto4_Slowing))
+        {
+         conditionMet = false;
+        }
+     }
+   return conditionMet;
+  }
+
+
 //+------------------------------------------------------------------+
 //| Check if Stochastic %D is below Lower Level within Lookback      |
 //+------------------------------------------------------------------+
@@ -211,7 +284,25 @@ bool IsStoBelowLevel(int KPeriod, int DPeriod, int Slowing)
      }
    return false;
   }
+//+------------------------------------------------------------------+
+//| Check if Stochastic %D is above Upper Level within Lookback      |
+//+------------------------------------------------------------------+
 
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool IsStoAboveLevel(int KPeriod, int DPeriod, int Slowing)
+  {
+   for(int shift = 0; shift < LookbackPeriod; shift++)
+     {
+      double sto_D = iStochastic(NULL, 0, KPeriod, Slowing, DPeriod, MODE_SMA, 1, MODE_SIGNAL, shift);
+      if(sto_D >= Sto_UpperLevel)
+        {
+         return true;
+        }
+     }
+   return false;
+  }
 //+------------------------------------------------------------------+
 //| Place Buy Order                                                  |
 //+------------------------------------------------------------------+
@@ -246,14 +337,48 @@ void PlaceBuyOrder(double fractalLow)
       Print("Buy order placed successfully. Ticket #", ticket);
      }
   }
+//+------------------------------------------------------------------+
+//| Place Buy Order                                                  |
+//+------------------------------------------------------------------+
+void PlaceSellOrder(double fractalHigh)
+  {
+   double stopLoss = fractalHigh + StopBuffer * Point;
 
+// Ensure the lot size is within allowed limits
+   double lotSize = LotSize; // Use the input LotSize directly
+   double minLot  = MarketInfo(Symbol(), MODE_MINLOT);
+   double maxLot  = MarketInfo(Symbol(), MODE_MAXLOT);
+   double lotStep = MarketInfo(Symbol(), MODE_LOTSTEP);
+
+// Adjust the lot size to the broker's lot step
+   lotSize = NormalizeDouble(MathFloor(lotSize / lotStep) * lotStep, 2);
+
+   if(lotSize < minLot)
+      lotSize = minLot;
+   if(lotSize > maxLot)
+      lotSize = maxLot;
+
+   double bid = NormalizeDouble(MarketInfo(Symbol(), MODE_BID), Digits);
+   double sl = NormalizeDouble(stopLoss, Digits);
+
+   int ticket = OrderSend(Symbol(), OP_SELL, lotSize, bid, 3, sl, 0, "Quad EA Sell", magicNumber, 0, clrRed);
+   if(ticket < 0)
+     {
+      Print("OrderSend failed with error #", GetLastError());
+     }
+   else
+     {
+      Print("Sell order placed successfully. Ticket #", ticket);
+     }
+  }
 //+------------------------------------------------------------------+
 //| Manage Existing Positions (Trailing Stop)                        |
 //+------------------------------------------------------------------+
 void ManagePositions()
   {
 //--- Calculate the 14-period ADR
-   ADRValue = CalculateADR(14);
+ ADRValue = iATR(NULL, PERIOD_D1, 14, 1);
+   //ADRValue = CalculateADR(14);
    double trailStop = ADRValue * TrailingADR;
 
    int total = OrdersTotal();
@@ -261,22 +386,44 @@ void ManagePositions()
      {
       if(OrderSelect(i, SELECT_BY_POS, MODE_TRADES))
         {
-         if(OrderMagicNumber() == magicNumber && OrderSymbol() == Symbol() && OrderType() == OP_BUY)
-           {
-            double newStopLoss = Bid - trailStop;
-            if(newStopLoss > OrderStopLoss())
+         if(OrderMagicNumber() == magicNumber && OrderSymbol() == Symbol())
+            if((OrderType() == OP_BUY))
               {
-               bool modified = OrderModify(OrderTicket(), OrderOpenPrice(), newStopLoss, OrderTakeProfit(), 0, clrBlue);
-               if(modified)
+               double newStopLoss = NormalizeDouble(Bid - trailStop, Digits());
+               if(newStopLoss > OrderStopLoss())
                  {
-                  Print("Order #", OrderTicket(), " stop loss modified to ", DoubleToString(newStopLoss, Digits));
-                 }
-               else
-                 {
-                  Print("Failed to modify stop loss for Order #", OrderTicket(), " Error: ", GetLastError());
+                  bool modified = OrderModify(OrderTicket(), OrderOpenPrice(), newStopLoss, OrderTakeProfit(), 0, clrBlue);
+                  if(modified)
+                    {
+                     Print("Order #", OrderTicket(), " stop loss modified to ", DoubleToString(newStopLoss, Digits));
+                    }
+                  else
+                    {
+                     Print("Failed to modify stop loss for Order #", OrderTicket(), " Error: ", GetLastError());
+                    }
                  }
               }
-           }
+            else
+               if((OrderType() == OP_SELL))
+                 {
+                  double newStopLoss = NormalizeDouble(Ask + trailStop,Digits());
+                  if(newStopLoss < OrderStopLoss())
+                    {
+                     bool modified = OrderModify(OrderTicket(), OrderOpenPrice(), newStopLoss, OrderTakeProfit(), 0, clrRed);
+                     if(modified)
+                       {
+                        Print("Order #", OrderTicket(), " stop loss modified to ", DoubleToString(newStopLoss, Digits));
+                       }
+                     else
+                       {
+                        Print("Failed to modify stop loss for Order #", OrderTicket(), " Error: ", GetLastError());
+                       }
+                    }
+
+
+
+
+                 }
         }
      }
   }
