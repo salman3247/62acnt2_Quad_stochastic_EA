@@ -65,9 +65,9 @@ input bool MA3_active = false;
 
 input bool MACD_active= false;
 
-int          fast_ema_period=12;   // Fast EMA period
-int          slow_ema_period= 26; // Slow EMA period
-int          signal_period=9;    // Signal line period
+input int          fast_ema_period=12;   // Fast EMA period
+input int          slow_ema_period= 26; // Slow EMA period
+input int          signal_period=9;    // Signal line period
 
 //--- Global Variables
 double ADRValue;
@@ -130,12 +130,12 @@ void OnTick()
 //      //--- Conditions not met
 //      return;
 //     }
-   double ma1= iMA(_Symbol, PERIOD_CURRENT, MA1_period, 0, MA1_method, PRICE_CLOSE, 0);
-   double ma2=  iMA(_Symbol, PERIOD_CURRENT, MA2_period, 0, MA2_method, PRICE_CLOSE, 0);
-   double ma3=  iMA(_Symbol, PERIOD_CURRENT, MA3_period, 0, MA3_method, PRICE_CLOSE, 0);
+   double ma1= iMA(_Symbol, PERIOD_CURRENT, MA1_period, 0, MA1_method, PRICE_CLOSE, 1);
+   double ma2=  iMA(_Symbol, PERIOD_CURRENT, MA2_period, 0, MA2_method, PRICE_CLOSE, 1);
+   double ma3=  iMA(_Symbol, PERIOD_CURRENT, MA3_period, 0, MA3_method, PRICE_CLOSE, 1);
 
-   double macd_fast= iMACD(_Symbol, PERIOD_CURRENT, fast_ema_period, slow_ema_period, signal_period, PRICE_CLOSE, MODE_SIGNAL, 0);
-   double macd_slow= iMACD(_Symbol, PERIOD_CURRENT, fast_ema_period, slow_ema_period, signal_period, PRICE_CLOSE, MODE_MAIN, 0);
+   double macd_fast= iMACD(_Symbol, PERIOD_CURRENT, fast_ema_period, slow_ema_period, signal_period, PRICE_CLOSE, MODE_SIGNAL, 1);
+   double macd_slow= iMACD(_Symbol, PERIOD_CURRENT, fast_ema_period, slow_ema_period, signal_period, PRICE_CLOSE, MODE_MAIN, 1);
 //--- All conditions met, place a buy order
 //place buy
    if(trade_direction !=SELL_ONLY  && CheckStochasticConditions_Buy())
